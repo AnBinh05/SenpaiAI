@@ -1,0 +1,2 @@
+# SenpaiAI Backend Application
+
