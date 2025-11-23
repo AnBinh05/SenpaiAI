@@ -42,12 +42,44 @@ export default function Chat() {
     (data: { message: string; context?: string; jlpt_level?: string }) =>
       chatAPI.sendMessage(data.message, data.context, data.jlpt_level).then(res => res.data),
     {
-      onSuccess: () => {
+      onMutate: async (newMessage) => {
+        // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+        await queryClient.cancelQueries(['chatHistory'])
+
+        // Snapshot the previous value
+        const previousHistory = queryClient.getQueryData(['chatHistory'])
+
+        // Optimistically update to the new value
+        const optimisticMessage: ChatMessage = {
+          id: Date.now(), // Temporary ID
+          question: newMessage.message,
+          answer: '...', // Placeholder while waiting for response
+          created_at: new Date().toISOString(),
+        }
+
+        queryClient.setQueryData(['chatHistory'], (old: ChatMessage[] = []) => [
+          optimisticMessage,
+          ...old,
+        ])
+
+        // Return a context object with the snapshotted value
+        return { previousHistory }
+      },
+      onSuccess: (data, variables, context) => {
+        // Invalidate and refetch to get the real data from server
         queryClient.invalidateQueries(['chatHistory'])
         form.reset()
+        toast.success('Message sent successfully')
       },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to send message')
+      onError: (error: any, variables, context) => {
+        // If the mutation fails, use the context returned from onMutate to roll back
+        if (context?.previousHistory) {
+          queryClient.setQueryData(['chatHistory'], context.previousHistory)
+        }
+        
+        const errorMessage = error.response?.data?.detail || error.message || 'Failed to send message'
+        toast.error(errorMessage)
+        console.error('Chat error:', error)
       },
     }
   )
@@ -175,7 +207,14 @@ export default function Chat() {
                 </div>
                 <div className="flex-1 space-y-2">
                   <div className="bg-white border border-gray-200 rounded-lg p-3">
-                    <p className="text-sm text-gray-900 japanese-text">{message.answer}</p>
+                    {message.answer === '...' ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        <p className="text-sm text-gray-500 italic">AI is thinking...</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-900 japanese-text">{message.answer}</p>
+                    )}
                     
                     {message.jlpt_level && (
                       <div className="mt-2">
@@ -260,4 +299,5 @@ export default function Chat() {
     </div>
   )
 }
+
 

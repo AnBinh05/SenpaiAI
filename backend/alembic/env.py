@@ -8,9 +8,14 @@ import sys
 # Add the app directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from app.core.config import settings
-from app.core.database import Base
-from app.models.database import *  # Import all models
+try:
+    from app.core.config import settings
+    from app.core.database import Base
+    from app.models.database import *  # Import all models
+except ImportError as e:
+    print(f"Error importing app modules: {e}")
+    print("Make sure you're running from the backend directory and virtual environment is activated")
+    raise
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

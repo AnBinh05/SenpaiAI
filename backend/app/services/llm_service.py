@@ -1,8 +1,6 @@
-from langchain.llms import OpenAI
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain.chains import LLMChain
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_community.chat_models import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from typing import Dict, List, Any, Optional
 import time
 import json

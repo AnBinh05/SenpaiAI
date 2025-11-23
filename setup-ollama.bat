@@ -53,3 +53,12 @@ echo.
 echo 🎌 SenpaiAI is ready to use with Ollama!
 pause
 
+
+
+
+
+
+
+
+
+

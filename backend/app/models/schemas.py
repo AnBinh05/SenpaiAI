@@ -20,6 +20,7 @@ class User(UserBase):
     current_jlpt_level: str
     learning_goals: List[str]
     created_at: datetime
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -55,14 +56,15 @@ class ChatHistory(BaseModel):
     id: int
     question: str
     answer: str
-    jlpt_level: Optional[str]
-    grammar_points: Optional[List[Dict[str, Any]]]
-    translation: Optional[str]
-    sources: Optional[List[Dict[str, str]]]
+    jlpt_level: Optional[str] = None
+    grammar_points: Optional[List[Dict[str, Any]]] = None
+    translation: Optional[str] = None
+    sources: Optional[List[Dict[str, str]]] = None
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 
 # Grammar Analysis Schemas
 class GrammarAnalysisRequest(BaseModel):
@@ -145,4 +147,5 @@ class LearningSessionUpdate(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
+
 

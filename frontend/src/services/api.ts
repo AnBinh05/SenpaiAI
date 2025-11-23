@@ -42,7 +42,8 @@ export const authAPI = {
   register: (email: string, username: string, password: string) =>
     api.post('/auth/register', { email, username, password }),
   getMe: () => api.get('/auth/me'),
-  updateMe: (data: any) => api.put('/auth/me', data),
+  updateMe: (data: { username?: string; current_jlpt_level?: string; learning_goals?: string[] }) => 
+    api.put('/auth/me', data),
 }
 
 export const chatAPI = {
@@ -61,7 +62,7 @@ export const analysisAPI = {
     api.post('/analysis/grammar', { text, include_translation: includeTranslation }),
   translate: (text: string, sourceLang: string, targetLang: string) =>
     api.post('/analysis/translate', { text, source_lang: sourceLang, target_lang: targetLang }),
-  predictJLPT: (text: string) => api.post('/analysis/jlpt-level', text),
+  predictJLPT: (text: string) => api.post('/analysis/jlpt-level', { text }),
 }
 
 export const libraryAPI = {
@@ -73,4 +74,5 @@ export const libraryAPI = {
   getCategories: () => api.get('/library/categories'),
   getStats: () => api.get('/library/stats'),
 }
+
 

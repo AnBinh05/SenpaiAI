@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { api } from './api'
 
 interface User {
@@ -25,17 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      fetchUser()
-    } else {
-      setIsLoading(false)
-    }
-  }, [])
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const response = await api.get('/auth/me')
       setUser(response.data)
@@ -45,7 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      fetchUser()
+    } else {
+      setIsLoading(false)
+    }
+  }, [fetchUser])
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password })
@@ -82,4 +82,5 @@ export function useAuth() {
   }
   return context
 }
+
 

@@ -1,0 +1,55 @@
+═══════════════════════════════════════════════════════════
+   HƯỚNG DẪN CHẠY SENPAIAI BACKEND
+═══════════════════════════════════════════════════════════
+
+📁 ĐƯỜNG DẪN DỰ ÁN:
+   D:\AIII\backend
+
+🚀 CÁCH CHẠY:
+
+1️⃣  Trong PowerShell (Khuyến nghị):
+   ┌─────────────────────────────────────────┐
+   │ cd D:\AIII\backend                      │
+   │ .\start.ps1                             │
+   └─────────────────────────────────────────┘
+
+2️⃣  Trong CMD:
+   ┌─────────────────────────────────────────┐
+   │ cd D:\AIII\backend                      │
+   │ start.bat                               │
+   └─────────────────────────────────────────┘
+
+3️⃣  Chạy trực tiếp (PowerShell):
+   ┌─────────────────────────────────────────┐
+   │ cd D:\AIII\backend                      │
+   │ .\.venv\Scripts\Activate.ps1            │
+   │ uvicorn app.main:app --reload           │
+   └─────────────────────────────────────────┘
+
+4️⃣  Chạy trực tiếp (CMD):
+   ┌─────────────────────────────────────────┐
+   │ cd D:\AIII\backend                     │
+   │ .venv\Scripts\activate                 │
+   │ uvicorn app.main:app --reload          │
+   └─────────────────────────────────────────┘
+
+⚠️  LƯU Ý QUAN TRỌNG:
+   • Trong PowerShell: PHẢI dùng .\start.ps1 (có dấu chấm)
+   • Trong CMD: Có thể dùng start.bat hoặc .\start.bat
+   • KHÔNG chạy: python main.py (sai cách!)
+   • File main.py nằm ở: D:\AIII\backend\app\main.py
+
+✅ SAU KHI CHẠY THÀNH CÔNG:
+   • Backend API: http://localhost:8000
+   • API Docs: http://localhost:8000/docs
+   • Redoc: http://localhost:8000/redoc
+
+🛑 DỪNG SERVER:
+   Nhấn Ctrl + C trong cửa sổ terminal
+
+═══════════════════════════════════════════════════════════
+
+
+
+
+

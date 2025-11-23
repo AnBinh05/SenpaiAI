@@ -97,3 +97,4 @@ class Vocabulary(Base):
     example_sentences = Column(JSON, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+

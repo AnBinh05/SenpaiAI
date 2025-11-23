@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
-import os
+from fastapi.responses import JSONResponse
 
 from .core.config import settings
 from .core.database import engine, Base
@@ -78,8 +78,17 @@ async def health_check():
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    return HTTPException(
+    import traceback
+    # Log the full traceback for debugging
+    print("=" * 50)
+    print("UNHANDLED EXCEPTION:")
+    print("=" * 50)
+    print(traceback.format_exc())
+    print("=" * 50)
+    
+    return JSONResponse(
         status_code=500,
-        detail=f"Internal server error: {str(exc)}"
+        content={"detail": f"Internal server error: {str(exc)}"}
     )
+
 

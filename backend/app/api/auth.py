@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from typing import List
 
 from ..core.database import get_db
 from ..core.auth import (
@@ -12,14 +10,13 @@ from ..core.auth import (
     get_current_active_user
 )
 from ..core.config import settings
-from ..models.database import User
+from ..models.database import User as UserDB
 from ..models.schemas import (
     UserCreate, 
     UserLogin, 
-    User, 
+    User,
     UserUpdate,
-    Token,
-    ErrorResponse
+    Token
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -27,45 +24,53 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
-    
-    # Check if user already exists
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+    try:
+        # Check if user already exists
+        db_user = db.query(UserDB).filter(UserDB.email == user.email).first()
+        if db_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Check if username already exists
+        db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
+        if db_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+        
+        # Create new user
+        hashed_password = get_password_hash(user.password)
+        db_user = UserDB(
+            email=user.email,
+            username=user.username,
+            hashed_password=hashed_password,
+            current_jlpt_level="N5",
+            learning_goals=[]
         )
-    
-    # Check if username already exists
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if db_user:
+        
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        
+        return db_user
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating user: {str(e)}"
         )
-    
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        email=user.email,
-        username=user.username,
-        hashed_password=hashed_password,
-        current_jlpt_level="N5",
-        learning_goals=[]
-    )
-    
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    return db_user
 
 @router.post("/login", response_model=Token)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """Login user and return access token."""
     
     # Authenticate user
-    user = db.query(User).filter(User.email == user_credentials.email).first()
+    user = db.query(UserDB).filter(UserDB.email == user_credentials.email).first()
     
     if not user or not verify_password(user_credentials.password, user.hashed_password):
         raise HTTPException(
@@ -104,9 +109,9 @@ async def update_current_user(
     # Update user fields
     if user_update.username is not None:
         # Check if username is already taken
-        existing_user = db.query(User).filter(
-            User.username == user_update.username,
-            User.id != current_user.id
+        existing_user = db.query(UserDB).filter(
+            UserDB.username == user_update.username,
+            UserDB.id != current_user.id
         ).first()
         if existing_user:
             raise HTTPException(
@@ -135,4 +140,5 @@ async def delete_current_user(
     db.delete(current_user)
     db.commit()
     return None
+
 

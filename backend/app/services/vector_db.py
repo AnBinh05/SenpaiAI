@@ -1,10 +1,6 @@
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from langchain.embeddings import OpenAIEmbeddings
-from langchain_ollama import OllamaEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import Chroma
-from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List, Dict, Any, Optional
 import os
 from ..core.config import settings
@@ -17,17 +13,15 @@ class ChromaDBService:
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
             path=self.persist_directory,
-            settings=ChromaSettings(anonymized_telemetry=False)
+            settings=ChromaSettings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
         )
         
-        # Initialize embeddings based on provider
-        if settings.llm_provider == "ollama":
-            self.embeddings = OllamaEmbeddings(
-                model="nomic-embed-text",  # Lightweight embedding model
-                base_url=settings.ollama_base_url
-            )
-        else:
-            self.embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key)
+        # Embeddings will be handled by ChromaDB directly
+        # For Ollama, we'll use ChromaDB's default embedding function
+        self.embeddings = None
         
         # Initialize text splitter
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -42,13 +36,7 @@ class ChromaDBService:
             metadata={"hnsw:space": "cosine"}
         )
         
-        # Initialize LangChain Chroma vectorstore
-        self.vectorstore = Chroma(
-            client=self.client,
-            collection_name=self.collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=self.persist_directory
-        )
+        # ChromaDB collection is ready to use
 
     def add_documents(self, documents: List[Dict[str, Any]]) -> List[str]:
         """Add documents to the vector database."""

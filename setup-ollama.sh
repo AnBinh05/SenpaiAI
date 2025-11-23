@@ -49,3 +49,12 @@ echo "   - nomic-embed-text (for embeddings)"
 echo ""
 echo "🎌 SenpaiAI is ready to use with Ollama!"
 
+
+
+
+
+
+
+
+
+

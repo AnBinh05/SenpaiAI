@@ -14,3 +14,4 @@ echo ✅ SenpaiAI services stopped!
 echo 💡 To start again: start.bat
 pause
 
+

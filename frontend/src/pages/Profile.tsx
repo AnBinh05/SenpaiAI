@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from 'react-query'
 import { 
@@ -36,6 +36,18 @@ export default function Profile() {
       learning_goals: user?.learning_goals || [],
     }
   })
+
+  // Update form when user data changes
+  useEffect(() => {
+    if (user) {
+      form.reset({
+        username: user.username || '',
+        current_jlpt_level: user.current_jlpt_level || 'N5',
+        learning_goals: user.learning_goals || [],
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.username, user?.current_jlpt_level, user?.learning_goals])
 
   const updateProfileMutation = useMutation(
     (data: ProfileFormData) => authAPI.updateMe(data).then(res => res.data),
@@ -332,4 +344,5 @@ export default function Profile() {
     </div>
   )
 }
+
 

@@ -165,3 +165,12 @@ Ollama là lựa chọn tuyệt vời để chạy SenpaiAI miễn phí với ch
 
 🎌 **Chúc bạn học tiếng Nhật vui vẻ với SenpaiAI!**
 
+
+
+
+
+
+
+
+
+

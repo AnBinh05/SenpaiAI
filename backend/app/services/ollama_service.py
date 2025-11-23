@@ -1,7 +1,3 @@
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
-from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain.chains import LLMChain
-from langchain.schema import HumanMessage, SystemMessage
 from typing import Dict, List, Any, Optional
 import time
 import json
@@ -11,72 +7,99 @@ from ..core.config import settings
 
 class OllamaJapaneseLearningService:
     def __init__(self):
-        # Initialize Ollama LLM
-        self.llm = OllamaLLM(
-            model=settings.ollama_model,
-            base_url=settings.ollama_base_url,
-            temperature=0.7,
-            num_predict=1000,
-        )
+        # Store Ollama configuration
+        self.base_url = settings.ollama_base_url
+        self.embedding_model = "nomic-embed-text"
         
-        # Initialize Ollama embeddings (using a smaller model for embeddings)
-        self.embeddings = OllamaEmbeddings(
-            model="nomic-embed-text",  # Lightweight embedding model
-            base_url=settings.ollama_base_url
-        )
+        # Try to find and set a working model
+        self.model = self._get_working_model(settings.ollama_model)
         
         # Initialize prompts
         self._setup_prompts()
+    
+    def _get_working_model(self, preferred_model: str) -> str:
+        """Get a working model, fallback to available models if preferred not found."""
+        try:
+            available_models = self.get_available_models()
+            
+            # Check if preferred model is available
+            if preferred_model in available_models:
+                return preferred_model
+            
+            # Try common fallback models
+            fallback_models = [
+                "llama2",
+                "llama2:7b",
+                "llama2:13b",
+                "mistral",
+                "mistral:7b",
+                "gemma:7b",
+                "gemma:2b",
+                "gemma3:270m",  # Smaller Gemma model
+                "phi",
+                "phi:2"
+            ]
+            
+            for fallback in fallback_models:
+                if fallback in available_models:
+                    print(f"⚠️  Warning: Model '{preferred_model}' not found. Using fallback: '{fallback}'")
+                    return fallback
+            
+            # If no models found, return preferred (will error later with better message)
+            if not available_models:
+                print(f"⚠️  Warning: No Ollama models found. Please install a model with: ollama pull {preferred_model}")
+            else:
+                print(f"⚠️  Warning: Model '{preferred_model}' not found. Available models: {', '.join(available_models)}")
+                print(f"⚠️  Using first available model: {available_models[0]}")
+                return available_models[0]
+            
+            return preferred_model
+            
+        except Exception as e:
+            print(f"⚠️  Warning: Could not check available models: {e}")
+            return preferred_model
 
     def _setup_prompts(self):
         """Setup all the prompt templates."""
-        
-        # Chat prompt for general Q&A
-        self.chat_prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content="""You are SenpaiAI, a helpful Japanese learning assistant. 
-            You provide accurate, educational responses about Japanese language, culture, and grammar.
-            Always include relevant examples and explanations suitable for the user's JLPT level.
-            If asked about grammar, provide detailed explanations with usage patterns.
-            If asked for translations, provide both literal and natural translations.
-            Use polite, encouraging language and include cultural context when relevant.
-            Respond in a helpful and educational manner."""),
-            HumanMessage(content="{question}")
-        ])
-        
-        # Grammar analysis prompt
-        self.grammar_prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content="""You are a Japanese grammar expert. Analyze the given Japanese text and provide:
-            1. JLPT level assessment (N5-N1)
-            2. Grammar points with explanations
-            3. Difficulty score (0-10)
-            4. Learning suggestions
+        # Prompts are now built directly in methods
+        pass
+    
+    def _call_ollama(self, prompt: str, system_prompt: str = None, timeout: int = 30) -> str:
+        """Call Ollama API directly with optimized settings."""
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
             
-            Format your response as JSON with these fields:
-            - jlpt_level: string
-            - grammar_points: array of objects with 'pattern', 'explanation', 'example'
-            - difficulty_score: number
-            - suggestions: array of strings"""),
-            HumanMessage(content="Analyze this Japanese text: {text}")
-        ])
-        
-        # Translation prompt
-        self.translation_prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content="""You are a professional Japanese-Vietnamese translator.
-            Provide accurate, natural translations while preserving the original meaning and tone.
-            For Japanese to Vietnamese: Provide both literal and natural translations.
-            For Vietnamese to Japanese: Provide natural Japanese that sounds native.
-            Include pronunciation guides (romaji) for Japanese text when helpful."""),
-            HumanMessage(content="Translate this {source_lang} text to {target_lang}: {text}")
-        ])
-        
-        # JLPT level prediction prompt
-        self.jlpt_prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content="""You are a JLPT level assessment expert. 
-            Analyze Japanese text and determine the appropriate JLPT level (N5, N4, N3, N2, N1).
-            Consider vocabulary difficulty, grammar complexity, and kanji usage.
-            Respond with just the JLPT level (e.g., "N3")."""),
-            HumanMessage(content="What JLPT level is this text: {text}")
-        ])
+            # Optimize for speed: lower temperature, limit tokens, faster model settings
+            options = {
+                "temperature": 0.7,  # Balanced creativity
+                "num_predict": 500,  # Limit response length for faster generation
+                "top_p": 0.9,
+                "top_k": 40,
+            }
+            
+            response = ollama.chat(
+                model=self.model,
+                messages=messages,
+                options=options
+            )
+            return response['message']['content']
+        except Exception as e:
+            # Fallback to generate if chat fails
+            try:
+                response = ollama.generate(
+                    model=self.model,
+                    prompt=f"{system_prompt}\n\n{prompt}" if system_prompt else prompt,
+                    options={
+                        "temperature": 0.7,
+                        "num_predict": 500,
+                    }
+                )
+                return response['response']
+            except:
+                raise Exception(f"Ollama API error: {str(e)}")
 
     async def chat_response(
         self, 
@@ -98,13 +121,24 @@ class OllamaJapaneseLearningService:
             if jlpt_level:
                 enhanced_question = f"User's JLPT level: {jlpt_level}\n\n{enhanced_question}"
             
-            # Generate response using Ollama
-            response = self.llm.invoke(enhanced_question)
+            # Generate response using Ollama with optimized prompt
+            system_prompt = """You are SenpaiAI, a Japanese learning assistant. 
+            Answer the user's question directly and clearly. 
+            If the question is in Vietnamese, respond in Vietnamese. If in Japanese, respond in Japanese.
+            Provide accurate, concise answers. Include examples only when helpful.
+            Focus on answering what was asked, not extra information."""
             
-            answer = response.strip()
+            answer = self._call_ollama(enhanced_question, system_prompt).strip()
             
-            # Predict JLPT level of the response
-            jlpt_prediction = await self.predict_jlpt_level(answer)
+            # Only predict JLPT level if answer contains Japanese characters (skip for speed)
+            jlpt_prediction = None
+            if any(ord(char) > 127 for char in answer):  # Contains non-ASCII (likely Japanese)
+                try:
+                    jlpt_prediction = await self.predict_jlpt_level(answer)
+                except:
+                    jlpt_prediction = jlpt_level or "N3"  # Use user's level as fallback
+            else:
+                jlpt_prediction = jlpt_level or "N3"  # Use user's level if no Japanese in answer
             
             response_time = time.time() - start_time
             
@@ -124,8 +158,20 @@ class OllamaJapaneseLearningService:
     async def analyze_grammar(self, text: str) -> Dict[str, Any]:
         """Analyze Japanese grammar in the given text."""
         try:
+            system_prompt = """You are a Japanese grammar expert. Analyze the given Japanese text and provide:
+            1. JLPT level assessment (N5-N1)
+            2. Grammar points with explanations
+            3. Difficulty score (0-10)
+            4. Learning suggestions
+            
+            Format your response as JSON with these fields:
+            - jlpt_level: string
+            - grammar_points: array of objects with 'pattern', 'explanation', 'example'
+            - difficulty_score: number
+            - suggestions: array of strings"""
+            
             prompt = f"Analyze this Japanese text: {text}"
-            response = self.llm.invoke(prompt)
+            response = self._call_ollama(prompt, system_prompt)
             
             # Try to parse JSON response
             try:
@@ -162,8 +208,14 @@ class OllamaJapaneseLearningService:
     ) -> Dict[str, Any]:
         """Translate text between Japanese and Vietnamese."""
         try:
+            system_prompt = """You are a professional Japanese-Vietnamese translator.
+            Provide accurate, natural translations while preserving the original meaning and tone.
+            For Japanese to Vietnamese: Provide both literal and natural translations.
+            For Vietnamese to Japanese: Provide natural Japanese that sounds native.
+            Include pronunciation guides (romaji) for Japanese text when helpful."""
+            
             prompt = f"Translate this {source_lang} text to {target_lang}: {text}"
-            response = self.llm.invoke(prompt)
+            response = self._call_ollama(prompt, system_prompt)
             
             translated_text = response.strip()
             
@@ -185,16 +237,23 @@ class OllamaJapaneseLearningService:
             }
 
     async def predict_jlpt_level(self, text: str) -> str:
-        """Predict the JLPT level of Japanese text."""
+        """Predict the JLPT level of Japanese text (optimized for speed)."""
         try:
-            prompt = f"What JLPT level is this text: {text}"
-            response = self.llm.invoke(prompt)
+            # Use a simpler, faster prompt
+            system_prompt = """Respond with only the JLPT level: N5, N4, N3, N2, or N1."""
+            
+            # Limit text length for faster processing
+            text_sample = text[:200] if len(text) > 200 else text
+            prompt = f"JLPT level of: {text_sample}"
+            
+            response = self._call_ollama(prompt, system_prompt)
             
             level = response.strip()
             
-            # Validate JLPT level format
-            if re.match(r'^N[1-5]$', level):
-                return level
+            # Extract JLPT level from response (handle various formats)
+            match = re.search(r'N[1-5]', level)
+            if match:
+                return match.group()
             else:
                 return "N3"  # Default fallback
                 
@@ -211,7 +270,7 @@ class OllamaJapaneseLearningService:
             prompt = f"""Based on the user's JLPT level ({user_level}) and weak areas ({', '.join(weak_areas)}), 
             provide 5 specific learning suggestions. Focus on practical, actionable advice."""
             
-            response = self.llm.invoke(prompt)
+            response = self._call_ollama(prompt)
             
             # Split into individual suggestions
             suggestions = [s.strip() for s in response.split('\n') if s.strip()]
@@ -232,10 +291,16 @@ class OllamaJapaneseLearningService:
         """Get list of available Ollama models."""
         try:
             response = ollama.list()
-            return [model['name'] for model in response['models']]
-        except Exception:
+            if 'models' in response and response['models']:
+                return [model['name'] for model in response['models']]
+            return []
+        except Exception as e:
+            print(f"Error getting available models: {e}")
             return []
 
 # Global instance
 ollama_service = OllamaJapaneseLearningService()
+
+
+
 

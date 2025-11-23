@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import Body
 
-from ..core.database import get_db
 from ..core.auth import get_current_active_user
 from ..models.database import User
 from ..models.schemas import (
     GrammarAnalysisRequest,
     GrammarAnalysisResponse,
     TranslationRequest,
-    TranslationResponse,
-    ErrorResponse
+    TranslationResponse
 )
 from ..services.llm_service import japanese_service
 
@@ -102,7 +100,7 @@ async def translate_text(
 
 @router.post("/jlpt-level", response_model=dict)
 async def predict_jlpt_level(
-    text: str,
+    text: str = Body(..., embed=False),
     current_user: User = Depends(get_current_active_user)
 ):
     """Predict JLPT level of Japanese text."""
@@ -122,4 +120,5 @@ async def predict_jlpt_level(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error predicting JLPT level: {str(e)}"
         )
+
 

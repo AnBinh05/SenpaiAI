@@ -13,3 +13,4 @@ docker-compose down
 echo "✅ SenpaiAI services stopped!"
 echo "💡 To start again: ./start.sh"
 
+
