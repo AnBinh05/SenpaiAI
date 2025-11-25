@@ -78,14 +78,6 @@ async def health_check():
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    import traceback
-    # Log the full traceback for debugging
-    print("=" * 50)
-    print("UNHANDLED EXCEPTION:")
-    print("=" * 50)
-    print(traceback.format_exc())
-    print("=" * 50)
-    
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {str(exc)}"}

@@ -123,3 +123,10 @@ ollama serve
 3. Kiểm tra log backend để xem model nào đang được dùng
 
 
+
+
+
+
+
+
+

@@ -65,3 +65,10 @@ ollama list
 pause
 
 
+
+
+
+
+
+
+

@@ -122,3 +122,10 @@ Chạy script `backend/view_users.py` (sẽ tạo bên dưới)
 
 Tạo file `backend/view_users.py` để xem danh sách users và hash mật khẩu.
 
+
+
+
+
+
+
+

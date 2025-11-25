@@ -64,42 +64,65 @@ class OllamaJapaneseLearningService:
         # Prompts are now built directly in methods
         pass
     
-    def _call_ollama(self, prompt: str, system_prompt: str = None, timeout: int = 30) -> str:
+    def _call_ollama(self, prompt: str, system_prompt: str = None, timeout: int = 8) -> str:
         """Call Ollama API directly with optimized settings."""
         try:
+            # Check if Ollama is running
+            try:
+                ollama.list()
+            except Exception as check_error:
+                raise Exception(f"Ollama is not running or not accessible. Please start Ollama first. Error: {str(check_error)}")
+            
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
             
-            # Optimize for speed: lower temperature, limit tokens, faster model settings
+            # Optimize for speed: limit tokens significantly for 5s response time
             options = {
                 "temperature": 0.7,  # Balanced creativity
-                "num_predict": 500,  # Limit response length for faster generation
+                "num_predict": 120,  # Very short responses for speed (target: 5s)
                 "top_p": 0.9,
-                "top_k": 40,
+                "top_k": 20,  # Reduced for faster generation
             }
             
+            print(f"🤖 Calling Ollama with model: {self.model}")
             response = ollama.chat(
                 model=self.model,
                 messages=messages,
                 options=options
             )
+            
+            if not response or 'message' not in response or 'content' not in response['message']:
+                raise Exception("Invalid response from Ollama API")
+            
             return response['message']['content']
         except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Ollama chat error: {error_msg}")
+            
             # Fallback to generate if chat fails
             try:
+                print(f"🔄 Trying fallback generate method...")
                 response = ollama.generate(
                     model=self.model,
                     prompt=f"{system_prompt}\n\n{prompt}" if system_prompt else prompt,
                     options={
                         "temperature": 0.7,
-                        "num_predict": 500,
+                        "num_predict": 120,  # Very short for speed
                     }
                 )
+                if not response or 'response' not in response:
+                    raise Exception("Invalid response from Ollama generate API")
                 return response['response']
-            except:
-                raise Exception(f"Ollama API error: {str(e)}")
+            except Exception as fallback_error:
+                # More descriptive error message
+                if "model" in error_msg.lower() or "not found" in error_msg.lower():
+                    raise Exception(f"Model '{self.model}' not found. Please install it with: ollama pull {self.model}")
+                elif "connection" in error_msg.lower() or "refused" in error_msg.lower():
+                    raise Exception(f"Cannot connect to Ollama at {self.base_url}. Please make sure Ollama is running.")
+                else:
+                    raise Exception(f"Ollama API error: {str(e)}. Fallback also failed: {str(fallback_error)}")
 
     async def chat_response(
         self, 
@@ -121,26 +144,27 @@ class OllamaJapaneseLearningService:
             if jlpt_level:
                 enhanced_question = f"User's JLPT level: {jlpt_level}\n\n{enhanced_question}"
             
-            # Generate response using Ollama with optimized prompt
-            system_prompt = """You are SenpaiAI, a Japanese learning assistant. 
-            Answer the user's question directly and clearly. 
-            If the question is in Vietnamese, respond in Vietnamese. If in Japanese, respond in Japanese.
-            Provide accurate, concise answers. Include examples only when helpful.
-            Focus on answering what was asked, not extra information."""
+            # Generate response using Ollama with optimized, shorter prompt for speed
+            system_prompt = """Bạn là SenpaiAI, trợ lý học tiếng Nhật. 
+            QUAN TRỌNG: Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng yêu cầu cụ thể bằng ngôn ngữ khác.
+            - Nếu câu hỏi bằng tiếng Việt → trả lời bằng tiếng Việt
+            - Nếu câu hỏi bằng tiếng Nhật → giải thích bằng tiếng Việt, có thể kèm tiếng Nhật
+            - Giữ câu trả lời ngắn gọn, dễ hiểu (1-3 câu)
+            - Sử dụng ngôn ngữ thân thiện, khuyến khích học tập"""
             
+            print(f"💬 Generating response for: '{question[:50]}...'")
             answer = self._call_ollama(enhanced_question, system_prompt).strip()
             
-            # Only predict JLPT level if answer contains Japanese characters (skip for speed)
-            jlpt_prediction = None
-            if any(ord(char) > 127 for char in answer):  # Contains non-ASCII (likely Japanese)
-                try:
-                    jlpt_prediction = await self.predict_jlpt_level(answer)
-                except:
-                    jlpt_prediction = jlpt_level or "N3"  # Use user's level as fallback
-            else:
-                jlpt_prediction = jlpt_level or "N3"  # Use user's level if no Japanese in answer
+            if not answer or len(answer) == 0:
+                raise Exception("Received empty response from Ollama")
+            
+            print(f"✅ Got response: '{answer[:50]}...'")
+            
+            # Skip JLPT prediction completely for speed - always use user's level
+            jlpt_prediction = jlpt_level or "N3"  # Always use user's level, no prediction
             
             response_time = time.time() - start_time
+            print(f"⏱️  Response time: {response_time:.2f}s")
             
             return {
                 "answer": answer,
@@ -149,10 +173,15 @@ class OllamaJapaneseLearningService:
             }
             
         except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Error in chat_response: {error_msg}")
+            response_time = time.time() - start_time
+            
+            # Return error message that will be saved to chat history
             return {
-                "answer": f"I apologize, but I encountered an error: {str(e)}",
-                "jlpt_level": None,
-                "response_time": time.time() - start_time
+                "answer": f"Xin lỗi, có lỗi xảy ra khi tạo phản hồi: {error_msg}",
+                "jlpt_level": jlpt_level or "N3",
+                "response_time": response_time
             }
 
     async def analyze_grammar(self, text: str) -> Dict[str, Any]:

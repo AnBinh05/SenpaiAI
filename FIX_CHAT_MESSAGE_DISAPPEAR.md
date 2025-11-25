@@ -134,3 +134,10 @@ Sau khi cập nhật code:
    - Ctrl + Shift + R (Windows)
    - Cmd + Shift + R (Mac)
 
+
+
+
+
+
+
+

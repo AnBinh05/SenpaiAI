@@ -1,4 +1,5 @@
-# Script tự động tạo database PostgreSQL (PowerShell)
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000# Script tự động tạo database PostgreSQL (PowerShell)
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   TAO DATABASE POSTGRESQL" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
@@ -109,6 +110,13 @@ try {
 }
 
 Write-Host ""
+
+
+
+
+
+
+
 
 
 

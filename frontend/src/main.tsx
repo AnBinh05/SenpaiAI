@@ -38,6 +38,7 @@ ReactDOM.createRoot(rootElement).render(
             }}
           />
         </AuthProvider>
+
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

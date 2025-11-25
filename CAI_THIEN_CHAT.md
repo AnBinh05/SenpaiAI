@@ -114,3 +114,10 @@ Sau khi restart backend, thử các câu hỏi:
 - Nếu cần tốc độ cao hơn, cân nhắc dùng model nhỏ hơn (`gemma3:270m`)
 - Nếu cần chất lượng cao hơn, cân nhắc dùng model lớn hơn (`gemma:7b`, `llama2:7b`)
 
+
+
+
+
+
+
+
