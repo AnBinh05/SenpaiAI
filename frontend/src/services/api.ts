@@ -7,7 +7,6 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout - target 5s response time
 })
 
 // Request interceptor to add auth token
@@ -49,13 +48,9 @@ export const authAPI = {
 
 export const chatAPI = {
   sendMessage: (message: string, context?: string, jlpt_level?: string) =>
-    api.post('/chat/message', { message, context, jlpt_level }, {
-      timeout: 10000, // 10 seconds timeout - target 5s response
-    }),
+    api.post('/chat/message', { message, context, jlpt_level }),
   getHistory: (limit = 50, offset = 0) =>
-    api.get(`/chat/history?limit=${limit}&offset=${offset}`, {
-      timeout: 10000, // 10 seconds for history
-    }),
+    api.get(`/chat/history?limit=${limit}&offset=${offset}`),
   searchHistory: (query: string, limit = 20) =>
     api.get(`/chat/search?query=${query}&limit=${limit}`),
   deleteEntry: (chatId: number) => api.delete(`/chat/history/${chatId}`),
