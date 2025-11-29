@@ -533,13 +533,240 @@ class Settings(BaseSettings):
 ---
 
 ### 2. ChromaDB 0.4.18
-**Mục đích**: Vector database cho RAG (Retrieval-Augmented Generation)
+**Mục đích**: Vector database cho RAG (Retrieval-Augmented Generation) và semantic search
+
+**Cách sử dụng**:
+- Lưu trữ document embeddings (vector representations)
+- Semantic similarity search
+- Metadata filtering (JLPT level, document type)
+- RAG context retrieval cho AI responses
+
+**Vị trí trong code**:
+- `backend/app/services/vector_db.py` - ChromaDB service implementation
+- `backend/app/core/config.py` - ChromaDB configuration (persist_directory)
+
+**Kiến trúc**:
+- **Persistent Storage**: Lưu trữ local tại `./chroma_db`
+- **Collection**: "japanese_learning" collection
+- **Similarity Metric**: Cosine similarity (hnsw:space)
+- **Automatic Embeddings**: ChromaDB tự động tạo embeddings từ text
+
+**Ví dụ sử dụng**:
+```python
+# backend/app/services/vector_db.py
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+
+# Initialize persistent client
+client = chromadb.PersistentClient(
+    path="./chroma_db",
+    settings=ChromaSettings(
+        anonymized_telemetry=False,
+        allow_reset=True
+    )
+)
+
+# Get or create collection
+collection = client.get_or_create_collection(
+    name="japanese_learning",
+    metadata={"hnsw:space": "cosine"}  # Cosine similarity
+)
+
+# Add documents (embeddings tự động)
+collection.add(
+    documents=["Japanese grammar explanation..."],
+    metadatas=[{
+        "document_id": "1",
+        "title": "Grammar Guide",
+        "jlpt_level": "N5",
+        "document_type": "grammar"
+    }],
+    ids=["doc_1_chunk_0"]
+)
+
+# Semantic search
+results = collection.query(
+    query_texts=["What is は particle?"],
+    n_results=3,
+    where={"jlpt_level": "N5"}  # Metadata filter
+)
+```
+
+**Tính năng nâng cao**:
+- **Chunking**: Documents được split thành chunks (1000 chars, 200 overlap)
+- **Metadata Filtering**: Filter theo JLPT level, document type, tags
+- **Similarity Scoring**: Cosine distance → similarity score (1 - distance)
+- **Telemetry Disabled**: Privacy-first, không gửi data đi đâu
+- **HNSW Index**: Fast approximate nearest neighbor search
+
+**Integration với AI**:
+- Documents được embed và lưu trong ChromaDB
+- User queries được embed và search trong ChromaDB
+- Top-k relevant documents được retrieve làm context
+- Context được inject vào LLM prompt cho RAG
+
+**Xem thêm**: Chi tiết về RAG và Semantic Search trong phần [AI & Machine Learning](#-ai--machine-learning)
+
+---
+
+## 🤖 AI & MACHINE LEARNING
+
+### 1. Ollama 0.1.7
+**Mục đích**: Local LLM runtime - Chạy Large Language Models trên máy local
+
+**Cách sử dụng**:
+- Chạy LLM models locally (không cần API key, miễn phí)
+- Chat completions với system và user messages
+- Text generation cho các tác vụ AI
+- Grammar analysis và translation
+- JLPT level prediction
+
+**Vị trí trong code**:
+- `backend/app/services/ollama_service.py` - Ollama service implementation
+- `backend/app/core/config.py` - Ollama configuration (model, base_url)
+
+**Ví dụ sử dụng**:
+```python
+# backend/app/services/ollama_service.py
+import ollama
+
+# Chat completion
+response = ollama.chat(
+    model='gemma:2b',
+    messages=[
+        {'role': 'system', 'content': 'You are SenpaiAI, a Japanese tutor.'},
+        {'role': 'user', 'content': 'Explain は and が particles'}
+    ]
+)
+answer = response['message']['content']
+
+# Generate text
+response = ollama.generate(
+    model='gemma:2b',
+    prompt='Translate to Japanese: Hello'
+)
+```
+
+**Models được sử dụng**:
+- **gemma:2b** (Mặc định) - Nhẹ, nhanh, phù hợp cho mọi máy
+- **gemma:7b** - Chất lượng cao hơn, cần nhiều RAM
+- **llama2, llama3** - Models phổ biến
+- **mistral** - Model chất lượng cao
+- **nomic-embed-text** - Embedding model cho RAG
+
+**Tính năng**:
+- Retry logic với error handling
+- Connection checking
+- Model availability checking
+- Fallback mechanisms
+
+**Setup**:
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh  # Linux/Mac
+# Windows: Download từ https://ollama.ai/download
+
+# Pull models
+ollama pull gemma:2b
+ollama pull nomic-embed-text  # Cho embeddings
+```
+
+---
+
+### 2. LangChain Core & Community
+**Mục đích**: LLM framework và abstractions cho AI applications
+
+**Cách sử dụng**:
+- LLM provider abstraction (Ollama, OpenAI)
+- Prompt templates và message formatting
+- Chain composition cho complex workflows
+- Text splitting utilities cho RAG
+- Message types (SystemMessage, HumanMessage, AIMessage)
+
+**Vị trí trong code**:
+- `backend/app/services/llm_service.py` - LangChain integration
+- `backend/app/services/vector_db.py` - Text splitting với LangChain
+
+**Ví dụ sử dụng**:
+```python
+# backend/app/services/llm_service.py
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+# Prompt template
+self.chat_prompt = ChatPromptTemplate.from_messages([
+    SystemMessage(content="You are SenpaiAI, a helpful Japanese learning assistant."),
+    HumanMessage(content="{question}")
+])
+
+# Format và sử dụng
+messages = self.chat_prompt.format_messages(question=user_question)
+response = await self.llm.agenerate([messages])
+```
+
+**Components**:
+- `langchain-core` (>=0.1.0) - Core abstractions, prompts, messages
+- `langchain-community` (>=0.0.10) - Community integrations (OpenAI, etc.)
+- `langchain-text-splitters` (>=0.0.1) - Text splitting cho documents
+
+**Prompt Engineering**:
+- System prompts cho role definition
+- Context-aware prompts với RAG
+- Structured output prompts (JSON format)
+- Multi-turn conversation support
+
+---
+
+### 3. RAG (Retrieval-Augmented Generation)
+**Mục đích**: Cải thiện chất lượng AI responses bằng cách kết hợp retrieval và generation
+
+**Cách hoạt động**:
+1. User query → Semantic search trong vector database
+2. Retrieve relevant documents → Build context
+3. Combine context với user question → Enhanced prompt
+4. LLM generates response với context → More accurate answers
+
+**Vị trí trong code**:
+- `backend/app/services/vector_db.py` - RAG retrieval logic
+- `backend/app/api/chat.py` - RAG integration trong chat endpoint
+- `backend/app/services/ollama_service.py` - Context injection
+
+**Ví dụ sử dụng**:
+```python
+# backend/app/api/chat.py
+# 1. Get relevant context từ vector DB
+context = chroma_service.get_relevant_context(
+    message.message, 
+    message.jlpt_level or current_user.current_jlpt_level
+)
+
+# 2. Inject context vào prompt
+enhanced_question = f"Context: {context}\n\nQuestion: {question}"
+
+# 3. Generate response với context
+response_data = await japanese_service.chat_response(
+    question=message.message,
+    context=context,
+    jlpt_level=jlpt_level
+)
+```
+
+**Lợi ích**:
+- More accurate responses với domain knowledge
+- Up-to-date information từ documents
+- Reduced hallucinations
+- Context-aware answers
+
+---
+
+### 4. ChromaDB 0.4.18 - Vector Database
+**Mục đích**: Vector database cho semantic search và RAG
 
 **Cách sử dụng**:
 - Lưu trữ document embeddings
-- Semantic search
-- Similarity search
-- RAG context retrieval
+- Semantic similarity search
+- Metadata filtering (JLPT level, document type)
+- Cosine similarity cho relevance scoring
 
 **Vị trí trong code**:
 - `backend/app/services/vector_db.py` - ChromaDB service
@@ -549,130 +776,268 @@ class Settings(BaseSettings):
 # backend/app/services/vector_db.py
 import chromadb
 
-client = chromadb.Client()
-collection = client.get_or_create_collection("japanese_documents")
+# Initialize client
+client = chromadb.PersistentClient(path="./chroma_db")
 
-# Add documents với embeddings
+# Create collection
+collection = client.get_or_create_collection(
+    name="japanese_learning",
+    metadata={"hnsw:space": "cosine"}  # Cosine similarity
+)
+
+# Add documents với embeddings tự động
 collection.add(
-    documents=["document text"],
-    metadatas=[{"document_id": 1}],
+    documents=["Japanese grammar explanation..."],
+    metadatas=[{
+        "document_id": "1",
+        "title": "Grammar Guide",
+        "jlpt_level": "N5"
+    }],
     ids=["doc_1"]
 )
 
-# Search similar documents
+# Semantic search
 results = collection.query(
-    query_texts=["user query"],
-    n_results=3
+    query_texts=["What is は particle?"],
+    n_results=3,
+    where={"jlpt_level": "N5"}  # Filter by metadata
 )
 ```
 
 **Tính năng**:
-- Local storage (không cần server riêng)
-- Automatic embedding generation
-- Metadata filtering
-- Similarity scoring
+- **Automatic Embeddings**: ChromaDB tự động tạo embeddings
+- **Persistent Storage**: Lưu trữ local, không cần server riêng
+- **Metadata Filtering**: Filter theo JLPT level, document type
+- **Similarity Scoring**: Cosine similarity cho relevance
+- **Chunking**: Documents được split thành chunks để tối ưu search
+
+**Embedding Model**:
+- Sử dụng ChromaDB's default embedding function
+- Có thể cấu hình custom embedding model (nomic-embed-text)
 
 ---
 
-## 🤖 AI & MACHINE LEARNING
-
-### 1. Ollama 0.1.7
-**Mục đích**: Local LLM runtime
+### 5. Text Splitting (LangChain Text Splitters)
+**Mục đích**: Chia documents thành chunks phù hợp cho vector search
 
 **Cách sử dụng**:
-- Chạy LLM models locally (không cần API key)
-- Chat completions
-- Text generation
-- Grammar analysis
+- Split documents thành chunks nhỏ hơn
+- Overlap giữa chunks để giữ context
+- Optimize chunk size cho embeddings
 
 **Vị trí trong code**:
-- `backend/app/services/ollama_service.py` - Ollama integration
+- `backend/app/services/vector_db.py` - RecursiveCharacterTextSplitter
 
 **Ví dụ sử dụng**:
 ```python
-# backend/app/services/ollama_service.py
-import ollama
+# backend/app/services/vector_db.py
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-response = ollama.chat(
-    model='llama2',
-    messages=[
-        {'role': 'system', 'content': 'You are a Japanese tutor.'},
-        {'role': 'user', 'content': 'Explain は and が particles'}
-    ]
+self.text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,      # Mỗi chunk ~1000 characters
+    chunk_overlap=200,    # Overlap 200 chars giữa chunks
+    length_function=len,
 )
+
+# Split document
+chunks = self.text_splitter.split_text(document_content)
+
+# Mỗi chunk được embed và lưu riêng
+for chunk in chunks:
+    collection.add(documents=[chunk], ...)
 ```
 
-**Models hỗ trợ**:
-- llama2, llama3
-- mistral
-- phi
-- Các models khác từ Ollama library
-
-**Setup**:
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull model
-ollama pull llama2
-```
+**Tại sao cần splitting**:
+- Embeddings có giới hạn token length
+- Smaller chunks = better semantic search
+- Overlap giữ nguyên context giữa các chunks
 
 ---
 
-### 2. LangChain Core & Community
-**Mục đích**: LLM framework và abstractions
+### 6. Semantic Search
+**Mục đích**: Tìm kiếm documents dựa trên ý nghĩa, không chỉ keywords
 
-**Cách sử dụng**:
-- LLM provider abstraction
-- Prompt templates
-- Chain composition
-- Text splitting cho RAG
+**Cách hoạt động**:
+1. User query → Convert thành embedding vector
+2. Compare với document embeddings → Similarity scores
+3. Return top-k most similar documents
 
 **Vị trí trong code**:
-- `backend/app/services/llm_service.py` - LangChain integration
+- `backend/app/services/vector_db.py` - `search_documents()` method
+- `backend/app/api/library.py` - Library search endpoint
 
 **Ví dụ sử dụng**:
 ```python
-# backend/app/services/llm_service.py
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
-
-prompt = ChatPromptTemplate.from_messages([
-    SystemMessage(content="You are a Japanese tutor."),
-    HumanMessage(content="{text}")
-])
+# backend/app/services/vector_db.py
+def search_documents(self, query: str, n_results: int = 5):
+    results = self.collection.query(
+        query_texts=[query],
+        n_results=n_results,
+        where={"jlpt_level": "N5"}  # Optional filter
+    )
+    
+    # Format results với similarity scores
+    for result in results:
+        similarity_score = 1 - result['distance']  # Convert to similarity
+        # Higher score = more relevant
 ```
 
-**Components**:
-- `langchain-core` - Core abstractions
-- `langchain-community` - Community integrations
-- `langchain-text-splitters` - Text splitting utilities
+**Ưu điểm so với keyword search**:
+- Hiểu được ý nghĩa, không chỉ từ khóa
+- Tìm được documents liên quan ngay cả khi không có exact match
+- Multilingual support (Japanese, Vietnamese)
 
 ---
 
-### 3. NumPy 1.24.3
-**Mục đích**: Numerical computing
+### 7. Prompt Engineering
+**Mục đích**: Thiết kế prompts hiệu quả để LLM hiểu và trả lời chính xác
+
+**Các loại prompts được sử dụng**:
+
+#### a) Chat Prompt
+```python
+system_prompt = """You are SenpaiAI, a helpful Japanese learning assistant. 
+You provide accurate, educational responses about Japanese language, culture, and grammar.
+Always include relevant examples and explanations suitable for the user's JLPT level."""
+```
+
+#### b) Grammar Analysis Prompt
+```python
+system_prompt = """You are a Japanese grammar expert. Analyze the given Japanese text and provide:
+1. JLPT level assessment (N5-N1)
+2. Grammar points with explanations
+3. Difficulty score (0-10)
+4. Learning suggestions
+
+Format your response as JSON with these fields:
+- jlpt_level: string
+- grammar_points: array of objects with 'pattern', 'explanation', 'example'
+- difficulty_score: number
+- suggestions: array of strings"""
+```
+
+#### c) Translation Prompt
+```python
+system_prompt = """You are a professional Japanese-Vietnamese translator.
+Provide accurate, natural translations while preserving the original meaning and tone.
+For Japanese to Vietnamese: Provide both literal and natural translations."""
+```
+
+#### d) JLPT Prediction Prompt
+```python
+system_prompt = """You are a JLPT level assessment expert. 
+Analyze Japanese text and determine the appropriate JLPT level (N5-N1).
+Consider vocabulary difficulty, grammar complexity, and kanji usage.
+Respond with just the JLPT level (e.g., "N3")."""
+```
+
+**Vị trí trong code**:
+- `backend/app/services/llm_service.py` - Prompt templates
+- `backend/app/services/ollama_service.py` - Prompt definitions
+
+**Best Practices**:
+- Clear role definition (system prompt)
+- Structured output format (JSON)
+- Context injection (RAG context, JLPT level)
+- Examples trong prompts (few-shot learning)
+
+---
+
+### 8. Context Management
+**Mục đích**: Quản lý context để LLM có đủ thông tin để trả lời
+
+**Các loại context**:
+
+#### a) RAG Context
+- Retrieved documents từ vector database
+- Relevant information cho user question
+- Filtered by JLPT level
+
+#### b) User Context
+- Current JLPT level
+- Learning goals
+- Previous conversation history
+
+#### c) System Context
+- Application state
+- User preferences
+- Session information
+
+**Ví dụ sử dụng**:
+```python
+# Combine multiple context sources
+enhanced_question = f"""
+User's JLPT level: {jlpt_level}
+Context from documents: {rag_context}
+
+Question: {user_question}
+"""
+```
+
+---
+
+### 9. NumPy 1.24.3
+**Mục đích**: Numerical computing cho vector operations
 
 **Cách sử dụng**:
 - Vector operations cho embeddings
 - Array operations
 - Mathematical computations
+- Distance calculations (nếu cần custom)
 
 **Vị trí trong code**:
-- Sử dụng trong vector operations (nếu cần)
+- Sử dụng trong vector operations (nếu cần custom similarity)
+- ChromaDB sử dụng NumPy internally
+
+**Use cases**:
+- Custom embedding calculations
+- Vector similarity computations
+- Data preprocessing
 
 ---
 
-### 4. Pandas 2.0.3
+### 10. Pandas 2.0.3
 **Mục đích**: Data analysis và manipulation
 
 **Cách sử dụng**:
-- Data processing
+- Data processing cho learning analytics
 - CSV/Excel file handling
-- Data analysis
+- Data analysis và statistics
+- Learning progress tracking
 
 **Vị trí trong code**:
 - Có thể sử dụng cho data analysis features
+- Learning statistics và reports
+
+---
+
+### 11. AI Features Implementation
+
+#### a) Chat với AI
+- **RAG Integration**: Sử dụng relevant documents để enhance responses
+- **Context-aware**: Hiểu user's JLPT level và learning goals
+- **Grammar Extraction**: Tự động extract grammar points từ responses
+
+#### b) Grammar Analysis
+- **Text Analysis**: Phân tích văn bản tiếng Nhật
+- **JLPT Assessment**: Đánh giá trình độ JLPT
+- **Pattern Recognition**: Nhận diện grammar patterns
+- **Difficulty Scoring**: Đánh giá độ khó (0-10)
+
+#### c) Translation
+- **Bidirectional**: Japanese ↔ Vietnamese
+- **Natural Translation**: Dịch tự nhiên, không chỉ literal
+- **Pronunciation Guides**: Romaji cho Japanese text
+
+#### d) JLPT Level Prediction
+- **Text Analysis**: Phân tích vocabulary, grammar, kanji
+- **Level Classification**: N5, N4, N3, N2, N1
+- **Automatic Detection**: Tự động detect level của text
+
+#### e) Learning Suggestions
+- **Personalized**: Dựa trên user level và weak areas
+- **Actionable**: Practical, actionable advice
+- **Context-aware**: Phù hợp với learning goals
 
 ---
 
