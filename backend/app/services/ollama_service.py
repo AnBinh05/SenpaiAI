@@ -20,29 +20,59 @@ class OllamaJapaneseLearningService:
         # Prompts are now built directly in methods
         pass
     
-    def _call_ollama(self, prompt: str, system_prompt: str = None) -> str:
-        """Call Ollama API directly."""
-        try:
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = ollama.chat(
-                model=self.model,
-                messages=messages
-            )
-            return response['message']['content']
-        except Exception as e:
-            # Fallback to generate if chat fails
+    def _call_ollama(self, prompt: str, system_prompt: str = None, max_retries: int = 2) -> str:
+        """Call Ollama API directly with retry logic."""
+        # Check Ollama connection first
+        if not self.check_ollama_connection():
+            raise Exception("Ollama is not running. Please start Ollama service.")
+        
+        last_error = None
+        for attempt in range(max_retries + 1):
             try:
-                response = ollama.generate(
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
+                
+                response = ollama.chat(
                     model=self.model,
-                    prompt=f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    messages=messages
                 )
-                return response['response']
-            except:
-                raise Exception(f"Ollama API error: {str(e)}")
+                return response['message']['content']
+            except Exception as e:
+                last_error = e
+                # If it's a connection error, try to reconnect
+                if "connection" in str(e).lower() or "terminated" in str(e).lower():
+                    if attempt < max_retries:
+                        import time
+                        time.sleep(1)  # Wait 1 second before retry
+                        continue
+                
+                # Fallback to generate if chat fails
+                try:
+                    response = ollama.generate(
+                        model=self.model,
+                        prompt=f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    )
+                    return response['response']
+                except Exception as e2:
+                    last_error = e2
+                    if attempt < max_retries:
+                        import time
+                        time.sleep(1)
+                        continue
+        
+        # If all retries failed, provide helpful error message
+        error_msg = str(last_error) if last_error else "Unknown error"
+        if "terminated" in error_msg.lower() or "exit status" in error_msg.lower():
+            raise Exception(
+                f"Ollama process terminated. Please check:\n"
+                f"1. Ollama is running: 'ollama serve' or restart Ollama\n"
+                f"2. Model '{self.model}' is installed: 'ollama pull {self.model}'\n"
+                f"3. System has enough memory\n"
+                f"Original error: {error_msg}"
+            )
+        raise Exception(f"Ollama API error after {max_retries + 1} attempts: {error_msg}")
 
     async def chat_response(
         self, 
@@ -119,6 +149,25 @@ class OllamaJapaneseLearningService:
                     result = json.loads(json_match.group())
                 else:
                     result = json.loads(response)
+                
+                # Ensure grammar_points is always an array
+                if "grammar_points" in result:
+                    if not isinstance(result["grammar_points"], list):
+                        # If it's a single object, wrap it in an array
+                        if isinstance(result["grammar_points"], dict):
+                            result["grammar_points"] = [result["grammar_points"]]
+                        else:
+                            result["grammar_points"] = []
+                else:
+                    result["grammar_points"] = []
+                
+                # Ensure suggestions is always an array
+                if "suggestions" in result:
+                    if not isinstance(result["suggestions"], list):
+                        result["suggestions"] = [str(result["suggestions"])] if result["suggestions"] else []
+                else:
+                    result["suggestions"] = []
+                    
             except json.JSONDecodeError:
                 # Fallback if JSON parsing fails
                 result = {
@@ -218,9 +267,16 @@ class OllamaJapaneseLearningService:
     def check_ollama_connection(self) -> bool:
         """Check if Ollama is running and accessible."""
         try:
+            # Try to list models - this will fail if Ollama is not running
             response = ollama.list()
+            # Also check if the model exists
+            models = [model['name'] for model in response.get('models', [])]
+            if self.model not in models:
+                print(f"Warning: Model '{self.model}' not found. Available models: {models}")
+                print(f"Please run: ollama pull {self.model}")
             return True
-        except Exception:
+        except Exception as e:
+            print(f"Ollama connection check failed: {str(e)}")
             return False
 
     def get_available_models(self) -> List[str]:

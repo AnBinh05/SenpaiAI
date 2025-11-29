@@ -103,6 +103,11 @@ async def populate_database():
     
     db = SessionLocal()
     try:
+        # Clear existing documents to avoid duplicates
+        print("Clearing existing documents...")
+        db.query(Document).delete()
+        db.commit()
+        
         print("Adding documents to database...")
         
         # Add documents
@@ -140,6 +145,19 @@ async def populate_database():
 
 async def populate_vector_store():
     """Populate the vector store with embeddings."""
+    print("Clearing existing vector store...")
+    try:
+        # Clear existing collection
+        chroma_service.client.delete_collection(name=chroma_service.collection_name)
+        # Recreate collection
+        chroma_service.collection = chroma_service.client.get_or_create_collection(
+            name=chroma_service.collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+        print("Vector store cleared successfully.")
+    except Exception as e:
+        print(f"Note: Could not clear vector store (may not exist yet): {e}")
+    
     print("Adding documents to vector store...")
     
     try:

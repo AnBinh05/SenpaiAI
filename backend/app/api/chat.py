@@ -114,14 +114,51 @@ async def get_chat_history(
 ):
     """Get user's chat history."""
     
-    chat_history = db.query(ChatHistory)\
-        .filter(ChatHistory.user_id == current_user.id)\
-        .order_by(ChatHistory.created_at.desc())\
-        .offset(offset)\
-        .limit(limit)\
-        .all()
-    
-    return chat_history
+    try:
+        chat_history = db.query(ChatHistory)\
+            .filter(ChatHistory.user_id == current_user.id)\
+            .order_by(ChatHistory.created_at.desc())\
+            .offset(offset)\
+            .limit(limit)\
+            .all()
+        
+        # Convert sources relevance from float to string for validation
+        result = []
+        for chat in chat_history:
+            chat_dict = {
+                "id": chat.id,
+                "question": chat.question,
+                "answer": chat.answer,
+                "jlpt_level": chat.jlpt_level,
+                "grammar_points": chat.grammar_points,
+                "translation": chat.translation,
+                "created_at": chat.created_at,
+            }
+            
+            # Convert sources if they exist
+            if chat.sources:
+                converted_sources = []
+                for source in chat.sources:
+                    if isinstance(source, dict):
+                        converted_source = source.copy()
+                        # Convert relevance from float to string if needed
+                        if "relevance" in converted_source and isinstance(converted_source["relevance"], (int, float)):
+                            converted_source["relevance"] = str(converted_source["relevance"])
+                        converted_sources.append(converted_source)
+                    else:
+                        converted_sources.append(source)
+                chat_dict["sources"] = converted_sources
+            else:
+                chat_dict["sources"] = None
+            
+            result.append(ChatHistorySchema(**chat_dict))
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving chat history: {str(e)}"
+        )
 
 @router.delete("/history/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_chat_entry(

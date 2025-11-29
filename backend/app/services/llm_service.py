@@ -1,6 +1,11 @@
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
+try:
+    from langchain_community.chat_models import ChatOpenAI
+except ImportError:
+    # Fallback for older versions
+    from langchain.chat_models import ChatOpenAI
+
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from typing import Dict, List, Any, Optional
 import time
 import json
@@ -136,6 +141,25 @@ class JapaneseLearningService:
             # Try to parse JSON response
             try:
                 result = json.loads(result_text)
+                
+                # Ensure grammar_points is always an array
+                if "grammar_points" in result:
+                    if not isinstance(result["grammar_points"], list):
+                        # If it's a single object, wrap it in an array
+                        if isinstance(result["grammar_points"], dict):
+                            result["grammar_points"] = [result["grammar_points"]]
+                        else:
+                            result["grammar_points"] = []
+                else:
+                    result["grammar_points"] = []
+                
+                # Ensure suggestions is always an array
+                if "suggestions" in result:
+                    if not isinstance(result["suggestions"], list):
+                        result["suggestions"] = [str(result["suggestions"])] if result["suggestions"] else []
+                else:
+                    result["suggestions"] = []
+                    
             except json.JSONDecodeError:
                 # Fallback if JSON parsing fails
                 result = {

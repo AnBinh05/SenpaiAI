@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from 'react-query'
+import { useQuery, useQueryClient } from 'react-query'
 import { useForm } from 'react-hook-form'
 import { 
   Library as LibraryIcon, 
@@ -9,7 +9,9 @@ import {
   Tag, 
   Calendar,
   ExternalLink,
-  Loader2
+  Loader2,
+  Plus,
+  X
 } from 'lucide-react'
 import { libraryAPI } from '../services/api'
 import { getJLPTColor, formatDate } from '../utils/helpers'
@@ -32,14 +34,37 @@ interface SearchFormData {
   jlpt_level: string
 }
 
+interface DocumentFormData {
+  title: string
+  content: string
+  document_type: string
+  jlpt_level: string
+  tags: string
+  source_url: string
+}
+
 export default function Library() {
+  const queryClient = useQueryClient()
   const [searchResults, setSearchResults] = useState<Document[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   const searchForm = useForm<SearchFormData>({
     defaultValues: {
       document_type: '',
       jlpt_level: '',
+    }
+  })
+
+  const documentForm = useForm<DocumentFormData>({
+    defaultValues: {
+      title: '',
+      content: '',
+      document_type: '',
+      jlpt_level: '',
+      tags: '',
+      source_url: '',
     }
   })
 
@@ -88,6 +113,40 @@ export default function Library() {
   const clearSearch = () => {
     setSearchResults([])
     searchForm.reset()
+  }
+
+  const handleAddDocument = async (data: DocumentFormData) => {
+    setIsSubmitting(true)
+    try {
+      const tagsArray = data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : []
+      
+      await libraryAPI.createDocument({
+        title: data.title,
+        content: data.content,
+        document_type: data.document_type,
+        jlpt_level: data.jlpt_level || undefined,
+        tags: tagsArray,
+        source_url: data.source_url || undefined,
+      })
+      
+      // Refresh documents list and stats
+      queryClient.invalidateQueries(['documents'])
+      queryClient.invalidateQueries(['libraryStats'])
+      queryClient.invalidateQueries(['categories'])
+      
+      // Reset form and close
+      documentForm.reset()
+      setShowAddForm(false)
+      
+      // Show success message
+      alert('Document added successfully!')
+    } catch (error: any) {
+      console.error('Failed to create document:', error)
+      const errorMessage = error.response?.data?.detail || 'Failed to create document. Please try again.'
+      alert(errorMessage)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const displayDocuments = searchResults.length > 0 ? searchResults : documents || []
@@ -160,6 +219,170 @@ export default function Library() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Document Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="btn btn-primary"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add New Document
+        </button>
+      </div>
+
+      {/* Add Document Form */}
+      {showAddForm && (
+        <div className="card">
+          <div className="card-header">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="card-title">Add New Document</h2>
+                <p className="card-description">
+                  Add a new learning material to the library
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddForm(false)
+                  documentForm.reset()
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="card-content">
+            <form onSubmit={documentForm.handleSubmit(handleAddDocument)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    {...documentForm.register('title', { required: 'Title is required' })}
+                    type="text"
+                    className="input w-full"
+                    placeholder="e.g., Basic Greetings - N5"
+                  />
+                  {documentForm.formState.errors.title && (
+                    <p className="text-red-500 text-sm mt-1">{documentForm.formState.errors.title.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="document_type" className="block text-sm font-medium text-gray-700 mb-2">
+                    Document Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    {...documentForm.register('document_type', { required: 'Document type is required' })}
+                    className="input w-full"
+                  >
+                    <option value="">Select type...</option>
+                    <option value="vocabulary">Vocabulary</option>
+                    <option value="grammar">Grammar</option>
+                    <option value="lesson">Lesson</option>
+                    <option value="culture">Culture</option>
+                    <option value="example">Example</option>
+                  </select>
+                  {documentForm.formState.errors.document_type && (
+                    <p className="text-red-500 text-sm mt-1">{documentForm.formState.errors.document_type.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="jlpt_level" className="block text-sm font-medium text-gray-700 mb-2">
+                    JLPT Level
+                  </label>
+                  <select
+                    {...documentForm.register('jlpt_level')}
+                    className="input w-full"
+                  >
+                    <option value="">Select level...</option>
+                    <option value="N5">N5</option>
+                    <option value="N4">N4</option>
+                    <option value="N3">N3</option>
+                    <option value="N2">N2</option>
+                    <option value="N1">N1</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
+                    Tags (comma-separated)
+                  </label>
+                  <input
+                    {...documentForm.register('tags')}
+                    type="text"
+                    className="input w-full"
+                    placeholder="e.g., greetings, basic, polite"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Separate multiple tags with commas</p>
+                </div>
+
+                <div>
+                  <label htmlFor="source_url" className="block text-sm font-medium text-gray-700 mb-2">
+                    Source URL
+                  </label>
+                  <input
+                    {...documentForm.register('source_url')}
+                    type="url"
+                    className="input w-full"
+                    placeholder="https://example.com/..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
+                    Content <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    {...documentForm.register('content', { required: 'Content is required' })}
+                    rows={8}
+                    className="input w-full"
+                    placeholder="Enter the document content here..."
+                  />
+                  {documentForm.formState.errors.content && (
+                    <p className="text-red-500 text-sm mt-1">{documentForm.formState.errors.content.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="btn btn-primary"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Document
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddForm(false)
+                    documentForm.reset()
+                  }}
+                  className="btn btn-outline"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

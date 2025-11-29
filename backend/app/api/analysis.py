@@ -27,18 +27,38 @@ async def analyze_grammar(
         # Generate translation if requested
         translation = None
         if request.include_translation:
-            translation_result = await japanese_service.translate_text(
-                text=request.text,
-                source_lang="ja",
-                target_lang="vi"
-            )
-            translation = translation_result["translated_text"]
+            try:
+                translation_result = await japanese_service.translate_text(
+                    text=request.text,
+                    source_lang="ja",
+                    target_lang="vi"
+                )
+                translation = translation_result["translated_text"]
+                # Check if translation is an error message
+                if translation and translation.startswith("Translation error"):
+                    translation = None  # Don't show error as translation
+            except Exception as e:
+                # If translation fails, continue without it
+                translation = None
+                print(f"Translation failed: {str(e)}")
         
         # Generate learning suggestions based on analysis
-        suggestions = await japanese_service.generate_learning_suggestions(
-            user_level=current_user.current_jlpt_level,
-            weak_areas=[point.get("pattern", "") for point in analysis_result.get("grammar_points", [])]
-        )
+        suggestions = []
+        try:
+            suggestions = await japanese_service.generate_learning_suggestions(
+                user_level=current_user.current_jlpt_level,
+                weak_areas=[point.get("pattern", "") for point in analysis_result.get("grammar_points", [])]
+            )
+            # Filter out error messages
+            suggestions = [s for s in suggestions if not s.startswith("Error generating")]
+        except Exception as e:
+            # If suggestions fail, use default suggestions
+            suggestions = [
+                "Review the grammar points identified above",
+                f"Practice sentences at {analysis_result.get('jlpt_level', 'N3')} level",
+                "Focus on the patterns you find difficult"
+            ]
+            print(f"Learning suggestions failed: {str(e)}")
         
         return GrammarAnalysisResponse(
             text=request.text,

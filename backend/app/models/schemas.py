@@ -49,7 +49,7 @@ class ChatResponse(BaseModel):
     jlpt_level: Optional[str] = None
     grammar_points: Optional[List[Dict[str, Any]]] = None
     translation: Optional[str] = None
-    sources: Optional[List[Dict[str, str]]] = None
+    sources: Optional[List[Dict[str, Any]]] = None  # Changed to Any to allow numbers in relevance
     response_time: float
 
 class ChatHistory(BaseModel):
@@ -59,7 +59,7 @@ class ChatHistory(BaseModel):
     jlpt_level: Optional[str] = None
     grammar_points: Optional[List[Dict[str, Any]]] = None
     translation: Optional[str] = None
-    sources: Optional[List[Dict[str, str]]] = None
+    sources: Optional[List[Dict[str, Any]]] = None  # Changed from Dict[str, str] to Dict[str, Any] to allow numbers
     created_at: datetime
     
     model_config = {
@@ -111,6 +111,22 @@ class DocumentSearchRequest(BaseModel):
     document_type: Optional[str] = None
     jlpt_level: Optional[str] = None
     limit: int = 10
+
+class DocumentCreate(BaseModel):
+    title: str
+    content: str
+    document_type: str
+    jlpt_level: Optional[str] = None
+    tags: List[str] = []
+    source_url: Optional[str] = None
+
+class DocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    document_type: Optional[str] = None
+    jlpt_level: Optional[str] = None
+    tags: Optional[List[str]] = None
+    source_url: Optional[str] = None
 
 class DocumentSearchResponse(BaseModel):
     documents: List[Document]

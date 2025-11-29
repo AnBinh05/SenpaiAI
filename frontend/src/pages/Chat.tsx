@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Send, Bot, User, Loader2, Trash2, Search } from 'lucide-react'
+import { Send, Bot, User, Loader2, Trash2, Search, BookOpen } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { chatAPI } from '../services/api'
 import { useAuth } from '../services/auth'
@@ -32,29 +32,64 @@ export default function Chat() {
 
   const { data: chatHistory, isLoading: isLoadingHistory, refetch: refetchHistory, error: historyError } = useQuery(
     ['chatHistory'],
-    () => chatAPI.getHistory().then(res => {
-      // Ensure we return an array
-      if (!res.data) {
-        console.warn('⚠️ No data in response, returning empty array')
-        return []
+    () => {
+      // Check if user is logged in
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        throw new Error('Bạn chưa đăng nhập. Vui lòng đăng nhập để xem lịch sử chat.')
       }
       
-      if (!Array.isArray(res.data)) {
-        console.warn('⚠️ Response data is not an array:', typeof res.data, res.data)
-        return []
-      }
-      
-      return res.data
-    }).catch(error => {
-      console.error('❌ Error loading chat history:', error)
-      console.error('❌ Error response:', error.response)
-      console.error('❌ Error data:', error.response?.data)
-      throw error
-    }),
+      return chatAPI.getHistory().then(res => {
+        // Ensure we return an array
+        if (!res.data) {
+          console.warn('⚠️ No data in response, returning empty array')
+          return []
+        }
+        
+        if (!Array.isArray(res.data)) {
+          console.warn('⚠️ Response data is not an array:', typeof res.data, res.data)
+          return []
+        }
+        
+        return res.data
+      }).catch(error => {
+        console.error('❌ Error loading chat history:', error)
+        console.error('❌ Error response:', error.response)
+        console.error('❌ Error data:', error.response?.data)
+        
+        // Handle specific error cases
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          // Authentication error - clear token and redirect
+          localStorage.removeItem('access_token')
+          window.location.href = '/login'
+          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+        }
+        
+        // Create a more descriptive error
+        const errorMessage = error.response?.data?.detail || 
+                            error.message || 
+                            (error.code === 'ERR_NETWORK' || !error.response 
+                              ? 'Lỗi kết nối. Vui lòng kiểm tra backend đang chạy.' 
+                              : 'Lỗi không xác định')
+        
+        const enhancedError = new Error(errorMessage)
+        ;(enhancedError as any).response = error.response
+        ;(enhancedError as any).code = error.code
+        throw enhancedError
+      })
+    },
     {
       refetchOnWindowFocus: true, // Refetch when window gains focus
       refetchInterval: false, // Don't auto-refetch
-      retry: 1, // Retry once on failure
+      retry: (failureCount, error: any) => {
+        // Don't retry on auth errors
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          return false
+        }
+        // Retry once for other errors
+        return failureCount < 1
+      },
+      enabled: !!localStorage.getItem('access_token'), // Only run if user is logged in
     }
   )
 
@@ -232,7 +267,28 @@ export default function Chat() {
           <div className="flex flex-col items-center justify-center py-12 text-red-500">
             <Bot className="h-12 w-12 mb-4" />
             <p className="text-lg font-medium">Lỗi khi tải lịch sử chat</p>
-            <p className="text-sm">{historyError instanceof Error ? historyError.message : 'Lỗi không xác định'}</p>
+            <p className="text-sm">
+              {(() => {
+                if (historyError instanceof Error) {
+                  const error = historyError as any
+                  // Check for network error
+                  if (error.message?.includes('Network') || error.code === 'ERR_NETWORK' || !error.response) {
+                    return 'Lỗi kết nối. Vui lòng kiểm tra backend đang chạy.'
+                  }
+                  // Check for authentication error
+                  if (error.response?.status === 401) {
+                    return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+                  }
+                  // Check for server error
+                  if (error.response?.status >= 500) {
+                    return 'Lỗi server. Vui lòng thử lại sau.'
+                  }
+                  // Return API error message
+                  return error.response?.data?.detail || error.message || 'Lỗi không xác định'
+                }
+                return 'Lỗi không xác định'
+              })()}
+            </p>
             <button
               onClick={() => refetchHistory()}
               className="mt-4 btn btn-primary btn-sm"
@@ -340,15 +396,67 @@ export default function Chat() {
                       </div>
                     )}
                     
-                    {message.grammar_points && Array.isArray(message.grammar_points) && message.grammar_points.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium text-gray-700 mb-1">Grammar Points:</p>
-                        <div className="space-y-1">
-                          {message.grammar_points.map((point, idx) => (
-                            <div key={idx} className="text-xs text-gray-600">
-                              <span className="font-medium">{point?.pattern || 'Unknown'}:</span> {point?.explanation || ''}
+                    {message.grammar_points && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-xs font-semibold text-gray-800 mb-2 flex items-center">
+                          <BookOpen className="h-3 w-3 mr-1" />
+                          Grammar Points
+                        </p>
+                        <div className="space-y-2">
+                          {Array.isArray(message.grammar_points) && message.grammar_points.length > 0 ? (
+                            message.grammar_points.map((point, idx) => {
+                              // Handle both object and string formats
+                              if (typeof point === 'string') {
+                                return (
+                                  <div key={idx} className="text-xs text-gray-700 bg-white p-2 rounded border-l-2 border-primary-400">
+                                    {point}
+                                  </div>
+                                )
+                              }
+                              
+                              // Handle object format
+                              const pattern = point?.pattern || point?.grammar || 'Unknown'
+                              const explanation = point?.explanation || point?.description || ''
+                              const example = point?.example || ''
+                              
+                              return (
+                                <div key={idx} className="bg-white border border-gray-200 rounded p-2">
+                                  <div className="flex items-start space-x-2">
+                                    <div className="flex-shrink-0">
+                                      <div className="h-5 w-5 rounded-full bg-primary-100 flex items-center justify-center">
+                                        <span className="text-xs font-medium text-primary-600">
+                                          {idx + 1}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="text-xs font-semibold text-gray-900 mb-0.5 japanese-text">
+                                        {pattern}
+                                      </h5>
+                                      {explanation && (
+                                        <p className="text-xs text-gray-600 mb-1">
+                                          {explanation}
+                                        </p>
+                                      )}
+                                      {example && (
+                                        <div className="mt-1 p-1.5 bg-gray-50 rounded text-xs japanese-text text-gray-700 border-l-2 border-gray-300">
+                                          {example}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })
+                          ) : typeof message.grammar_points === 'object' ? (
+                            // Handle case where grammar_points is a single object instead of array
+                            <div className="bg-white border border-gray-200 rounded p-2">
+                              <div className="text-xs text-gray-700">
+                                <span className="font-semibold">{message.grammar_points.pattern || 'Grammar Point'}:</span>{' '}
+                                {message.grammar_points.explanation || JSON.stringify(message.grammar_points)}
+                              </div>
                             </div>
-                          ))}
+                          ) : null}
                         </div>
                       </div>
                     )}

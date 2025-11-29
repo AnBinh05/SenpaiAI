@@ -44,6 +44,9 @@ export const authAPI = {
   getMe: () => api.get('/auth/me'),
   updateMe: (data: { username?: string; current_jlpt_level?: string; learning_goals?: string[] }) => 
     api.put('/auth/me', data),
+  exportData: () => api.get('/auth/me/export'),
+  resetProgress: () => api.post('/auth/me/reset-progress'),
+  deleteAccount: () => api.delete('/auth/me'),
 }
 
 export const chatAPI = {
@@ -69,6 +72,23 @@ export const libraryAPI = {
   getDocuments: (documentType?: string, jlptLevel?: string, limit = 50, offset = 0) =>
     api.get(`/library/documents?document_type=${documentType || ''}&jlpt_level=${jlptLevel || ''}&limit=${limit}&offset=${offset}`),
   getDocument: (documentId: number) => api.get(`/library/documents/${documentId}`),
+  createDocument: (data: {
+    title: string
+    content: string
+    document_type: string
+    jlpt_level?: string
+    tags?: string[]
+    source_url?: string
+  }) => api.post('/library/documents', data),
+  updateDocument: (documentId: number, data: {
+    title?: string
+    content?: string
+    document_type?: string
+    jlpt_level?: string
+    tags?: string[]
+    source_url?: string
+  }) => api.put(`/library/documents/${documentId}`, data),
+  deleteDocument: (documentId: number) => api.delete(`/library/documents/${documentId}`),
   searchDocuments: (query: string, documentType?: string, jlptLevel?: string, limit = 10) =>
     api.post('/library/search', { query, document_type: documentType, jlpt_level: jlptLevel, limit }),
   getCategories: () => api.get('/library/categories'),

@@ -196,3 +196,4 @@ A: Có! Bạn có thể copy tất cả lệnh và paste vào psql, mỗi lệnh
 
 
 
+

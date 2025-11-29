@@ -5,19 +5,31 @@ from typing import List, Dict, Any, Optional
 import os
 from ..core.config import settings
 
+# Disable ChromaDB telemetry before importing
+os.environ.setdefault('ANONYMIZED_TELEMETRY', 'False')
+os.environ.setdefault('CHROMA_TELEMETRY_DISABLED', 'True')
+
 class ChromaDBService:
     def __init__(self):
         self.persist_directory = settings.chroma_persist_directory
         self.collection_name = "japanese_learning"
         
-        # Initialize ChromaDB client
-        self.client = chromadb.PersistentClient(
-            path=self.persist_directory,
-            settings=ChromaSettings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        # Initialize ChromaDB client with telemetry disabled
+        try:
+            self.client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=ChromaSettings(
+                    anonymized_telemetry=False,
+                    allow_reset=True,
+                    is_persistent=True
+                )
             )
-        )
+        except Exception as e:
+            # Fallback if settings cause issues
+            print(f"Warning: ChromaDB settings error: {e}, using default settings")
+            self.client = chromadb.PersistentClient(
+                path=self.persist_directory
+            )
         
         # Embeddings will be handled by ChromaDB directly
         # For Ollama, we'll use ChromaDB's default embedding function
@@ -51,6 +63,7 @@ class ChromaDBService:
                 
                 # Create document metadata
                 metadata = {
+                    "document_id": str(doc_data["id"]),  # Store document ID for easy retrieval
                     "title": doc_data["title"],
                     "document_type": doc_data["document_type"],
                     "jlpt_level": doc_data.get("jlpt_level", ""),
@@ -91,11 +104,13 @@ class ChromaDBService:
         if results["documents"] and results["documents"][0]:
             for i, doc in enumerate(results["documents"][0]):
                 metadata = results["metadatas"][0][i]
+                doc_id = results["ids"][0][i] if results["ids"] and results["ids"][0] else None
                 distance = results["distances"][0][i] if results["distances"] else 0
                 
                 formatted_results.append({
                     "content": doc,
                     "metadata": metadata,
+                    "doc_id": doc_id,  # Include ChromaDB document ID
                     "similarity_score": 1 - distance,  # Convert distance to similarity
                     "source": {
                         "title": metadata.get("title", ""),
