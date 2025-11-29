@@ -71,3 +71,4 @@ python -c "from app.core.database import SessionLocal; from app.models.database 
 python -c "from app.services.vector_db import chroma_service; print(chroma_service.get_collection_stats())"
 ```
 
+

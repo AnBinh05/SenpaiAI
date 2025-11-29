@@ -139,3 +139,4 @@ cat frontend/.env
 - Nếu dùng Docker, đảm bảo ports được map đúng
 - Firewall có thể chặn localhost connections
 
+

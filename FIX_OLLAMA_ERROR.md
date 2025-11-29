@@ -118,3 +118,4 @@ python -m uvicorn app.main:app --reload
 1. Thêm `OPENAI_API_KEY` vào `backend/.env`
 2. Đổi `LLM_PROVIDER=openai` trong `backend/.env`
 
+
