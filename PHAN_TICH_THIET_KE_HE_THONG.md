@@ -1088,3 +1088,5 @@ Các biểu đồ UML trên mô tả đầy đủ:
 
 Hệ thống sử dụng công nghệ AI hiện đại (LLM + RAG) để cung cấp trải nghiệm học tiếng Nhật tương tác và hiệu quả.
 
+
+

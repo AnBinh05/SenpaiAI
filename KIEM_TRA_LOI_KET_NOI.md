@@ -140,3 +140,5 @@ cat frontend/.env
 - Firewall có thể chặn localhost connections
 
 
+
+

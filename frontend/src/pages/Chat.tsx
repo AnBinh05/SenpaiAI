@@ -118,9 +118,15 @@ export default function Chat() {
         ])
         
         // Scroll to bottom to show new message
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ 
+              behavior: 'smooth',
+              block: 'end',
+              inline: 'nearest'
+            })
+          }, 150)
+        })
 
         // Return a context object with the snapshotted value
         return { previousHistory }
@@ -131,10 +137,7 @@ export default function Chat() {
         // Refetch immediately
         queryClient.refetchQueries(['chatHistory'])
         form.reset()
-        // Scroll to bottom after response
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }, 200)
+        // Don't auto-scroll - let user stay at their current position
         // Don't show success toast - response is visible in chat
         console.log('✅ Message sent successfully, chat history refreshed')
       },
@@ -206,12 +209,24 @@ export default function Chat() {
       return questionMatch || answerMatch
     })
   
+  // Only scroll when initially loading history (first load)
   useEffect(() => {
-    // Scroll to bottom when chat history changes or when sending message
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
-  }, [chatHistory, sendMessageMutation.isLoading, isLoadingHistory])
+    if (!isLoadingHistory && chatHistory && chatHistory.length > 0) {
+      // Only scroll on initial load, not on refetch
+      const isInitialLoad = !messagesEndRef.current?.getBoundingClientRect().height
+      if (isInitialLoad) {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ 
+              behavior: 'auto',
+              block: 'end',
+              inline: 'nearest'
+            })
+          }, 100)
+        })
+      }
+    }
+  }, [isLoadingHistory]) // Only depend on isLoadingHistory, not chatHistory
 
   const handleSubmit = (data: MessageFormData) => {
     if (!data.message.trim()) return
@@ -254,7 +269,10 @@ export default function Chat() {
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-white p-4 space-y-4 min-h-0">
+      <div 
+        className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-white p-4 space-y-4 min-h-0"
+        style={{ scrollBehavior: 'smooth' }}
+      >
         {/* Loading state */}
         {isLoadingHistory && (
           <div className="flex justify-center py-8">
@@ -493,7 +511,8 @@ export default function Chat() {
           </>
         )}
         
-        <div ref={messagesEndRef} />
+        {/* Scroll anchor - always at the bottom */}
+        <div ref={messagesEndRef} className="h-1" />
       </div>
 
       {/* Message Input */}

@@ -72,3 +72,5 @@ python -c "from app.services.vector_db import chroma_service; print(chroma_servi
 ```
 
 
+
+
